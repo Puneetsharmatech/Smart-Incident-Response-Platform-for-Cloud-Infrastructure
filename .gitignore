@@ -1,0 +1,15 @@
+# .gitignore
+# Terraform-specific ignore rules
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*.tfvars
+!*.tfvars.example # if you have a tfvars example file
+*.tfplan
+
+# VS Code specific ignore rules (optional but good practice)
+.vscode/
