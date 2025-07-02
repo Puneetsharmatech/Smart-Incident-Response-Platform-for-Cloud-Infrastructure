@@ -80,9 +80,7 @@ Engaging with this project will provide invaluable experience and expertise in s
 
 ## 💡 Workflow Overview (Conceptual)
 
-Here's a high-level conceptual workflow illustrating how the platform will operate, from data ingestion to user interaction and notifications.
 
-```mermaid
 graph TD
     subgraph Azure Cloud Environment
         A[Azure Infrastructure<br>(VMs, VNets, etc.)] --> B(Azure Monitor / Log Analytics<br>Emit Metrics & Logs)
