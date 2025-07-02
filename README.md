@@ -78,30 +78,3 @@ Engaging with this project will provide invaluable experience and expertise in s
 * **Observability & Incident Response:** Gain practical expertise in establishing robust observability practices, understanding logging and metrics, and developing effective incident response workflows.
 * **Secure Multi-Tier Web Applications:** Understand and implement comprehensive security best practices for deploying complex web applications on Azure, including identity management (Entra ID) and network security (NSGs).
 
-## 💡 Workflow Overview (Conceptual)
-
-
-graph TD
-    subgraph Azure Cloud Environment
-        A[Azure Infrastructure<br>(VMs, VNets, etc.)] --> B(Azure Monitor / Log Analytics<br>Emit Metrics & Logs)
-    end
-
-    subgraph Application Tier
-        C{Application Tier: API Layer<br>(FastAPI/Node.js)}
-        B -- Fetch Metrics/Logs --> C
-        C -- Apply Custom Logic --> E{Incident Detected?}
-    end
-
-    subgraph Data Tier & Notifications
-        E -- Yes --> F[Data Tier: Azure MySQL / Cosmos DB<br>Store Incident History]
-        E -- Yes --> G[Azure Communication Services / Action Groups<br>Trigger Notifications]
-        G -- Send Alerts --> H[External Channels<br>(Email / SMS / Teams / Slack)]
-    end
-
-    subgraph Presentation Tier & User
-        C -- Expose API --> J[Presentation Tier: React Dashboard<br>Visualize Alerts & Metrics]
-        J -- User Interaction --> K[User<br>(Monitor / Configure)]
-        K -- Configure Thresholds --> C
-    end
-
-    E -- No --> C
