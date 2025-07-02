@@ -12,4 +12,4 @@ override.tf.json
 *.tfplan
 
 # VS Code specific ignore rules (optional but good practice)
-.vscode/
+.vscode/.terraform/
