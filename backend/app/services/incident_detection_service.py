@@ -1,10 +1,15 @@
 # backend/app/services/incident_detection_service.py
 
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta, timezone # Import timezone here!
+from datetime import datetime, timedelta, timezone
 
 # Import our data models for metrics
 from app.models.metric_data import MetricResponse, MetricValue, Metric
+
+# Firebase Imports
+from firebase_admin import firestore
+import firebase_admin # Ensure this is imported for the 'db' global
+from app.main import db, current_app_id # Import the initialized db client and app_id from main.py
 
 # Define a simple Incident model for now. We'll enhance this when we add a database.
 class Incident:
@@ -43,6 +48,17 @@ class IncidentDetectionService:
         self.network_threshold_kbps = 100.0
         self.network_duration_minutes = 5
 
+        # Reference to the Firestore incidents collection
+        # Using a path that aligns with Canvas's public data rules, but for app-specific data
+        # We'll use a fixed 'app-incidents' collection within the appId scope.
+        self.incidents_collection_ref = None
+        if db and current_app_id:
+            self.incidents_collection_ref = db.collection(f"artifacts/{current_app_id}/public/data/incidents")
+            print(f"Firestore incident collection path: {self.incidents_collection_ref.path}")
+        else:
+            print("Firestore DB or App ID not initialized in IncidentDetectionService.")
+
+
     def _get_recent_average(self, data_points: List[MetricValue], duration_minutes: int) -> Optional[float]:
         """
         Calculates the average of a metric over the most recent 'duration_minutes'.
@@ -51,7 +67,7 @@ class IncidentDetectionService:
         if not data_points:
             return None
 
-        now = datetime.now(timezone.utc) # Use datetime.now() with timezone.utc
+        now = datetime.now(timezone.utc)
 
         recent_data = [
             dp.average for dp in data_points
@@ -116,7 +132,6 @@ class IncidentDetectionService:
            not network_metrics.value[0].timeseries or not network_metrics.value[1].timeseries:
             return None
 
-        # FIX: Access 'value' key from the 'name' dictionary
         network_in_metric = next((m for m in network_metrics.value if m.name['value'] == "Network In Total"), None)
         network_out_metric = next((m for m in network_metrics.value if m.name['value'] == "Network Out Total"), None)
 
@@ -151,6 +166,7 @@ class IncidentDetectionService:
                             network_metrics: MetricResponse) -> List[Incident]:
         """
         Runs all detection rules and returns a list of detected incidents.
+        Also saves newly detected incidents to Firestore.
         """
         detected_incidents: List[Incident] = []
 
@@ -165,5 +181,18 @@ class IncidentDetectionService:
         network_incident = self.detect_network_incident(network_metrics)
         if network_incident:
             detected_incidents.append(network_incident)
+
+        # Save detected incidents to Firestore
+        if self.incidents_collection_ref:
+            for incident in detected_incidents:
+                try:
+                    # Add a new document to the 'incidents' collection.
+                    # Firestore automatically generates a unique ID for the document.
+                    doc_ref = await self.incidents_collection_ref.add(incident.to_dict())
+                    print(f"Incident saved to Firestore with ID: {doc_ref[1].id}") # doc_ref is (timestamp, DocumentReference)
+                except Exception as e:
+                    print(f"Error saving incident to Firestore: {e}")
+        else:
+            print("Firestore collection reference not available. Incidents not saved.")
 
         return detected_incidents
