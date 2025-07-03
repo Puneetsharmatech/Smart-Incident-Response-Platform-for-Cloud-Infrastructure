@@ -1,0 +1,47 @@
+# .gitignore for Smart Incident Response Platform
+
+# Terraform
+# ---------------------------------------------------------------
+# Terraform state files - DO NOT COMMIT THESE!
+# They contain the state of your infrastructure and can include sensitive data.
+.terraform/
+*.tfstate
+*.tfstate.backup
+crash.log
+
+# Variable definition files that might contain sensitive data
+# If you use a .tfvars file for sensitive variables, add its name here.
+# For example: terraform.tfvars
+*.tfvars
+
+# Terraform lock file - can be committed for consistent provider versions,
+# but for simple projects, ignoring it avoids potential conflicts.
+.terraform.lock.hcl
+
+# Backend (Python/FastAPI)
+# ---------------------------------------------------------------
+# Python virtual environment directory
+venv/
+.venv/
+
+# Byte-code files
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE-specific files (e.g., VS Code)
+.vscode/
+
+# Environment variables file - contains local configuration and potentially secrets
+# DO NOT COMMIT THIS FILE!
+.env
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Frontend (React.js) - (We'll add more later when we start the frontend)
+# ---------------------------------------------------------------
+node_modules/
+build/
+.env.local # For React local environment variables
