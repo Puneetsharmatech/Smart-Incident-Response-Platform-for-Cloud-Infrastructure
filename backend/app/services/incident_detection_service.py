@@ -3,15 +3,12 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 
-# Import our data models for metrics
 from app.models.metric_data import MetricResponse, MetricValue, Metric
 
 # Firebase Imports
 from firebase_admin import firestore
-import firebase_admin # Ensure this is imported for the 'db' global
-from app.main import db, current_app_id # Import the initialized db client and app_id from main.py
+# REMOVED: from app.main import db, current_app_id # This caused the circular import
 
-# Define a simple Incident model for now. We'll enhance this when we add a database.
 class Incident:
     """Represents a detected incident."""
     def __init__(self,
@@ -31,7 +28,7 @@ class Incident:
         return {
             "incident_type": self.incident_type,
             "resource_id": self.resource_id,
-            "timestamp": self.timestamp.isoformat(), # ISO format for datetime
+            "timestamp": self.timestamp.isoformat(),
             "details": self.details,
             "severity": self.severity
         }
@@ -40,7 +37,8 @@ class IncidentDetectionService:
     """
     Service class to detect incidents based on incoming metric data.
     """
-    def __init__(self):
+    # UPDATED: Accept db_client and app_id as constructor arguments
+    def __init__(self, db_client: Any, app_id: str):
         self.cpu_threshold_percent = 80.0
         self.cpu_duration_minutes = 5
         self.memory_threshold_gb = 2.0
@@ -48,15 +46,18 @@ class IncidentDetectionService:
         self.network_threshold_kbps = 100.0
         self.network_duration_minutes = 5
 
+        # Store the injected db_client and app_id
+        self.db = db_client
+        self.app_id = app_id
+
         # Reference to the Firestore incidents collection
-        # Using a path that aligns with Canvas's public data rules, but for app-specific data
-        # We'll use a fixed 'app-incidents' collection within the appId scope.
         self.incidents_collection_ref = None
-        if db and current_app_id:
-            self.incidents_collection_ref = db.collection(f"artifacts/{current_app_id}/public/data/incidents")
+        if self.db and self.app_id:
+            # Use the injected db and app_id
+            self.incidents_collection_ref = self.db.collection(f"artifacts/{self.app_id}/public/data/incidents")
             print(f"Firestore incident collection path: {self.incidents_collection_ref.path}")
         else:
-            print("Firestore DB or App ID not initialized in IncidentDetectionService.")
+            print("Firestore DB or App ID not initialized in IncidentDetectionService constructor.")
 
 
     def _get_recent_average(self, data_points: List[MetricValue], duration_minutes: int) -> Optional[float]:
@@ -188,8 +189,9 @@ class IncidentDetectionService:
                 try:
                     # Add a new document to the 'incidents' collection.
                     # Firestore automatically generates a unique ID for the document.
+                    # Note: add() returns a tuple (update_time, DocumentReference) in async mode.
                     doc_ref = await self.incidents_collection_ref.add(incident.to_dict())
-                    print(f"Incident saved to Firestore with ID: {doc_ref[1].id}") # doc_ref is (timestamp, DocumentReference)
+                    print(f"Incident saved to Firestore with ID: {doc_ref[1].id}")
                 except Exception as e:
                     print(f"Error saving incident to Firestore: {e}")
         else:

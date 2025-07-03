@@ -4,12 +4,10 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any
 
 from app.services.azure_monitor_service import AzureMonitorService
-from app.services.incident_detection_service import IncidentDetectionService, Incident # Import Incident model
-from app.models.metric_data import MetricResponse
-
-# Firebase Imports
-from firebase_admin import firestore
-from app.main import db, current_app_id # Import the initialized db client and app_id from main.py
+from app.services.incident_detection_service import IncidentDetectionService, Incident
+# No longer importing db, current_app_id directly from app.main here
+# Instead, we'll use FastAPI's dependency injection for them.
+from app.main import get_firestore_client, get_app_id # NEW: Import dependency providers
 
 router = APIRouter(
     tags=["Monitoring"],
@@ -19,8 +17,12 @@ router = APIRouter(
 def get_azure_monitor_service():
     return AzureMonitorService()
 
-def get_incident_detection_service():
-    return IncidentDetectionService()
+# UPDATED: Now accepts db and app_id as arguments to pass to IncidentDetectionService
+def get_incident_detection_service(
+    db_client: Any = Depends(get_firestore_client), # Use the dependency provider
+    app_id: str = Depends(get_app_id)              # Use the dependency provider
+):
+    return IncidentDetectionService(db_client=db_client, app_id=app_id)
 
 # --- Metric Endpoints (unchanged) ---
 @router.get("/metrics/cpu/{duration_minutes}", response_model=MetricResponse)
@@ -94,19 +96,20 @@ async def detect_incidents(
     return [inc.to_dict() for inc in detected_incidents]
 
 @router.get("/incidents", response_model=List[Dict[str, Any]])
-async def get_all_incidents():
+async def get_all_incidents(
+    db_client: Any = Depends(get_firestore_client), # NEW: Get db client via dependency
+    app_id: str = Depends(get_app_id)              # NEW: Get app_id via dependency
+):
     """
     Retrieves all stored incidents from Firestore.
     """
-    if not db or not current_app_id:
-        raise HTTPException(status_code=500, detail="Firestore is not initialized.")
+    if not db_client or not app_id: # Use db_client and app_id from dependencies
+        raise HTTPException(status_code=500, detail="Firestore client or App ID not available.")
 
     try:
-        # Construct the collection reference using the Canvas-provided app ID
-        incidents_collection_ref = db.collection(f"artifacts/{current_app_id}/public/data/incidents")
+        incidents_collection_ref = db_client.collection(f"artifacts/{app_id}/public/data/incidents")
         
-        # Get all documents from the collection
-        docs = await incidents_collection_ref.get()
+        docs = await incidents_collection_ref.get() # Use await for async Firestore operation
         
         all_incidents = []
         for doc in docs:
@@ -114,7 +117,6 @@ async def get_all_incidents():
             if incident_data:
                 all_incidents.append(incident_data)
         
-        # Sort incidents by timestamp in descending order (most recent first)
         all_incidents.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         
         return all_incidents
