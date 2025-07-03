@@ -5,9 +5,11 @@ from typing import List, Dict, Any
 
 from app.services.azure_monitor_service import AzureMonitorService
 from app.services.incident_detection_service import IncidentDetectionService, Incident
-# No longer importing db, current_app_id directly from app.main here
-# Instead, we'll use FastAPI's dependency injection for them.
-from app.main import get_firestore_client, get_app_id # NEW: Import dependency providers
+from app.main import get_firestore_client, get_app_id
+
+# We still need to import MetricResponse for type hinting within the functions,
+# but FastAPI's response_model needs to be a string to avoid circular import issues at module load time.
+from app.models.metric_data import MetricResponse # Keep this import for type hinting
 
 router = APIRouter(
     tags=["Monitoring"],
@@ -17,19 +19,19 @@ router = APIRouter(
 def get_azure_monitor_service():
     return AzureMonitorService()
 
-# UPDATED: Now accepts db and app_id as arguments to pass to IncidentDetectionService
 def get_incident_detection_service(
-    db_client: Any = Depends(get_firestore_client), # Use the dependency provider
-    app_id: str = Depends(get_app_id)              # Use the dependency provider
+    db_client: Any = Depends(get_firestore_client),
+    app_id: str = Depends(get_app_id)
 ):
     return IncidentDetectionService(db_client=db_client, app_id=app_id)
 
-# --- Metric Endpoints (unchanged) ---
-@router.get("/metrics/cpu/{duration_minutes}", response_model=MetricResponse)
+# --- Metric Endpoints ---
+# FIX: Change response_model to a string literal
+@router.get("/metrics/cpu/{duration_minutes}", response_model="app.models.metric_data.MetricResponse")
 async def get_cpu_metrics(
     duration_minutes: int,
     azure_monitor_service: AzureMonitorService = Depends(get_azure_monitor_service)
-):
+) -> MetricResponse: # Add return type hint for clarity
     """
     Fetches CPU utilization metrics for the configured VM.
     """
@@ -40,11 +42,12 @@ async def get_cpu_metrics(
         raise HTTPException(status_code=500, detail="Could not fetch CPU metrics. Check backend logs for errors.")
     return metrics
 
-@router.get("/metrics/memory/{duration_minutes}", response_model=MetricResponse)
+# FIX: Change response_model to a string literal
+@router.get("/metrics/memory/{duration_minutes}", response_model="app.models.metric_data.MetricResponse")
 async def get_memory_metrics(
     duration_minutes: int,
     azure_monitor_service: AzureMonitorService = Depends(get_azure_monitor_service)
-):
+) -> MetricResponse: # Add return type hint for clarity
     """
     Fetches Available Memory Bytes metrics for the configured VM.
     """
@@ -55,11 +58,12 @@ async def get_memory_metrics(
         raise HTTPException(status_code=500, detail="Could not fetch Memory metrics. Check backend logs for errors.")
     return metrics
 
-@router.get("/metrics/network/{duration_minutes}", response_model=MetricResponse)
+# FIX: Change response_model to a string literal
+@router.get("/metrics/network/{duration_minutes}", response_model="app.models.metric_data.MetricResponse")
 async def get_network_metrics(
     duration_minutes: int,
     azure_monitor_service: AzureMonitorService = Depends(get_azure_monitor_service)
-):
+) -> MetricResponse: # Add return type hint for clarity
     """
     Fetches Network In Total and Network Out Total metrics for the configured VM.
     """
@@ -97,19 +101,19 @@ async def detect_incidents(
 
 @router.get("/incidents", response_model=List[Dict[str, Any]])
 async def get_all_incidents(
-    db_client: Any = Depends(get_firestore_client), # NEW: Get db client via dependency
-    app_id: str = Depends(get_app_id)              # NEW: Get app_id via dependency
+    db_client: Any = Depends(get_firestore_client),
+    app_id: str = Depends(get_app_id)
 ):
     """
     Retrieves all stored incidents from Firestore.
     """
-    if not db_client or not app_id: # Use db_client and app_id from dependencies
+    if not db_client or not app_id:
         raise HTTPException(status_code=500, detail="Firestore client or App ID not available.")
 
     try:
         incidents_collection_ref = db_client.collection(f"artifacts/{app_id}/public/data/incidents")
         
-        docs = await incidents_collection_ref.get() # Use await for async Firestore operation
+        docs = await incidents_collection_ref.get()
         
         all_incidents = []
         for doc in docs:
