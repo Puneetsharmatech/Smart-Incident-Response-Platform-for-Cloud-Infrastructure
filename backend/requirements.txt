@@ -1,0 +1,32 @@
+    # backend/requirements.txt
+
+    # FastAPI is a modern, fast (high-performance) web framework for building APIs with Python 3.7+
+    # based on standard Python type hints.
+    fastapi
+
+    # Uvicorn is an ASGI (Asynchronous Server Gateway Interface) server, which is
+    # required to run FastAPI applications. `[standard]` includes common dependencies
+    # like `websockets` and `httptools`.
+    uvicorn[standard]
+
+    # Azure Identity library provides Azure Active Directory authentication support.
+    # It allows our application to authenticate to Azure services using Managed Identity
+    # without needing to manage credentials manually.
+    azure-identity
+
+    # Azure Monitor Query library is part of the Azure SDK for Python.
+    # It provides client objects for querying metrics and logs from Azure Monitor.
+    azure-monitor-query
+
+    # Pydantic is a data validation and settings management library using Python type hints.
+    # FastAPI uses Pydantic extensively for defining request bodies, response models,
+    # and configuration settings, ensuring data integrity and providing automatic documentation.
+    pydantic
+
+    # Python-dotenv is used for loading environment variables from a .env file.
+    # This is primarily useful for local development, allowing you to manage environment
+    # variables outside of your code. On the Azure VM, when Managed Identity is used,
+    # this file won't be strictly necessary for Azure authentication, but it's good
+    # practice for other configuration.
+    python-dotenv
+    
