@@ -3,13 +3,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import json # Import json for parsing firebase_config_str
+import json
 
 # Firebase Imports
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 
-from app.api.v1 import monitoring
+# We will import monitoring inside the lifespan event to avoid circular dependency
+# from app.api.v1 import monitoring # REMOVE THIS LINE
+
 from app.config import settings
 
 # Global variables (initialized within lifespan, but not directly imported by other modules)
@@ -58,14 +60,23 @@ async def lifespan(app: FastAPI):
         _firebase_auth_client = auth
 
         if initial_auth_token:
-            user = await _firebase_auth_client.sign_in_with_custom_token(initial_auth_token)
-            print(f"Firebase authenticated with custom token. User UID: {user.uid}")
+            # Firebase Admin SDK's auth.sign_in_with_custom_token is for server-side verification,
+            # not for client-side authentication. We don't need to call it here to "authenticate" the SDK.
+            # The SDK is authenticated via the service account credentials.
+            # This line was conceptually incorrect for SDK authentication, but useful for understanding the token.
+            print(f"Custom auth token provided: {initial_auth_token[:10]}...") # Just log its presence
         else:
-            user = await _firebase_auth_client.sign_in_anonymously()
-            print(f"Firebase authenticated anonymously. User UID: {user.uid}")
+            # The SDK doesn't "sign in anonymously" itself. Its operations are authorized by the service account.
+            # This line for anonymous sign-in was also conceptually misplaced for SDK auth.
+            print("No custom auth token provided. SDK operates via service account credentials.")
 
     except Exception as e:
-        print(f"Failed to initialize or authenticate Firebase: {e}")
+        print(f"Failed to initialize Firebase Admin SDK: {e}")
+        # In a real application, you might want to exit or disable Firebase features.
+
+    # IMPORTANT: Import and include router AFTER Firebase is initialized and globals are set
+    from app.api.v1 import monitoring # Import here
+    app.include_router(monitoring.router, prefix="/api/v1") # Include here
 
     yield
 
@@ -99,7 +110,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(monitoring.router, prefix="/api/v1")
+# app.include_router(monitoring.router, prefix="/api/v1") # REMOVED: Moved into lifespan
 
 @app.get("/")
 async def read_root():
