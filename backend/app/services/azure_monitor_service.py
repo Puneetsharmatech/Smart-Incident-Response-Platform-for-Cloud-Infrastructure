@@ -3,7 +3,7 @@
 from azure.identity import DefaultAzureCredential
 from azure.monitor.query import MetricsQueryClient, MetricAggregationType
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional # Ensure Optional is imported
 
 from app.config import settings
 from app.models.metric_data import MetricResponse, Metric, MetricTimeSeriesElement, MetricValue
@@ -33,30 +33,25 @@ class AzureMonitorService:
         """
         try:
             # Construct the full Azure Resource ID for the Virtual Machine.
-            # This ID uniquely identifies the VM within your Azure subscription.
-            # Format: /subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Compute/virtualMachines/{vmName}
-            resource_uri = ( # Changed variable name to match expected argument
+            resource_uri = (
                 f"/subscriptions/{self.subscription_id}/resourceGroups/"
                 f"{self.resource_group_name}/providers/Microsoft.Compute/virtualMachines/"
                 f"{self.vm_name}"
             )
-            print(f"Fetching CPU metrics for resource ID: {resource_uri}") # For debugging
+            print(f"Fetching CPU metrics for resource ID: {resource_uri}")
 
             # Define the time range for the metric query.
             end_time = datetime.utcnow()
             start_time = end_time - timedelta(minutes=duration_minutes)
 
-            # Query Azure Monitor for the 'Percentage CPU' metric.
-            # CORRECTED: Changed 'resource_id' to 'resource_uri' as per the error message.
             response = self.metrics_client.query_resource(
-                resource_uri=resource_uri, # <--- THIS IS THE FIX
+                resource_uri=resource_uri,
                 metric_names=["Percentage CPU"],
                 timespan=(start_time, end_time),
                 granularity=timedelta(minutes=1),
                 aggregations=[MetricAggregationType.AVERAGE]
             )
 
-            # Process the raw response from Azure Monitor into our custom Pydantic models.
             metrics_list: List[Metric] = []
             for metric in response.metrics:
                 timeseries_elements: List[MetricTimeSeriesElement] = []
@@ -73,13 +68,24 @@ class AzureMonitorService:
                         ))
                     timeseries_elements.append(MetricTimeSeriesElement(data=data_values))
 
+                # --- FIX STARTS HERE ---
+                # Check if metric.name is an object with a 'value' attribute or a direct string/dict
+                metric_name_value = metric.name.value if hasattr(metric.name, 'value') else metric.name
+                # Ensure metric_name_value is a dictionary as expected by our Pydantic model
+                if not isinstance(metric_name_value, dict):
+                    metric_name_value = {"value": str(metric_name_value), "localizedValue": str(metric_name_value)}
+
+                # Check if metric.unit is an enum with a 'value' attribute or a direct string
+                metric_unit_value = str(metric.unit.value) if hasattr(metric.unit, 'value') else str(metric.unit)
+                # --- FIX ENDS HERE ---
+
                 metrics_list.append(Metric(
                     id=metric.id,
-                    name=metric.name.value,
+                    name=metric_name_value, # Use the corrected name value
                     type=metric.type,
-                    unit=str(metric.unit),
+                    unit=metric_unit_value, # Use the corrected unit value
                     timeseries=timeseries_elements,
-                    resourceId=resource_uri # Also update this to resource_uri for consistency
+                    resourceId=resource_uri
                 ))
 
             return MetricResponse(value=metrics_list)
