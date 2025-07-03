@@ -7,74 +7,55 @@ import json
 
 # Firebase Imports
 import firebase_admin
-from firebase_admin import credentials, firestore, auth
-
-# We will import monitoring inside the lifespan event to avoid circular dependency
-# from app.api.v1 import monitoring # REMOVE THIS LINE
-
-from app.config import settings
+from firebase_admin import credentials, firestore # Removed 'auth' import
 
 # Global variables (initialized within lifespan, but not directly imported by other modules)
 _firestore_db_client = None
-_firebase_auth_client = None
 _current_app_id = None
 
 # Lifespan context manager for FastAPI
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _firestore_db_client, _firebase_auth_client, _current_app_id
+    global _firestore_db_client, _current_app_id
 
     firebase_config_str = None
-    initial_auth_token = None
     app_id_from_canvas = None
 
+    # Check if __firebase_config is defined (provided by Canvas)
     if '__firebase_config' in globals() and globals()['__firebase_config']:
         firebase_config_str = globals()['__firebase_config']
         print("Firebase config found in Canvas globals.")
     else:
-        print("Firebase config NOT found in Canvas globals. Using default/empty config.")
+        print("Firebase config NOT found in Canvas globals. Firebase Admin SDK will NOT be initialized.")
 
-    if '__initial_auth_token' in globals() and globals()['__initial_auth_token']:
-        initial_auth_token = globals()['__initial_auth_token']
-        print("Initial auth token found in Canvas globals.")
-    else:
-        print("Initial auth token NOT found in Canvas globals. Will attempt anonymous sign-in.")
-
+    # Check if __app_id is defined (provided by Canvas)
     if '__app_id' in globals() and globals()['__app_id']:
         app_id_from_canvas = globals()['__app_id']
         print(f"App ID found in Canvas globals: {app_id_from_canvas}")
     else:
-        print("App ID NOT found in Canvas globals. Using default app ID.")
+        print("App ID NOT found in Canvas globals. Using default app ID for collection path.")
     
     _current_app_id = app_id_from_canvas if app_id_from_canvas else 'default-app-id'
 
     try:
         if firebase_config_str:
-            cred = credentials.Certificate(json.loads(firebase_config_str))
-            firebase_admin.initialize_app(cred)
-            print("Firebase Admin SDK initialized successfully with provided config.")
+            # Attempt to parse and initialize Firebase Admin SDK
+            try:
+                cred = credentials.Certificate(json.loads(firebase_config_str))
+                firebase_admin.initialize_app(cred)
+                _firestore_db_client = firestore.client()
+                print("Firebase Admin SDK initialized and Firestore client obtained successfully.")
+            except json.JSONDecodeError:
+                print("Error: __firebase_config is not valid JSON. Firebase Admin SDK NOT initialized.")
+            except Exception as e:
+                print(f"Failed to initialize Firebase Admin SDK with provided config: {e}")
         else:
-            print("Firebase Admin SDK not initialized with provided config. Check if __firebase_config is available.")
-
-        _firestore_db_client = firestore.client()
-        _firebase_auth_client = auth
-
-        if initial_auth_token:
-            # Firebase Admin SDK's auth.sign_in_with_custom_token is for server-side verification,
-            # not for client-side authentication. We don't need to call it here to "authenticate" the SDK.
-            # The SDK is authenticated via the service account credentials.
-            # This line was conceptually incorrect for SDK authentication, but useful for understanding the token.
-            print(f"Custom auth token provided: {initial_auth_token[:10]}...") # Just log its presence
-        else:
-            # The SDK doesn't "sign in anonymously" itself. Its operations are authorized by the service account.
-            # This line for anonymous sign-in was also conceptually misplaced for SDK auth.
-            print("No custom auth token provided. SDK operates via service account credentials.")
+            print("Firebase Admin SDK not initialized (no config provided). Firestore operations will fail.")
 
     except Exception as e:
-        print(f"Failed to initialize Firebase Admin SDK: {e}")
-        # In a real application, you might want to exit or disable Firebase features.
+        print(f"An unexpected error occurred during Firebase setup: {e}")
 
-    # IMPORTANT: Import and include router AFTER Firebase is initialized and globals are set
+    # IMPORTANT: Import and include router AFTER Firebase setup attempts are complete
     from app.api.v1 import monitoring # Import here
     app.include_router(monitoring.router, prefix="/api/v1") # Include here
 
@@ -86,12 +67,13 @@ async def lifespan(app: FastAPI):
 def get_firestore_client():
     """Provides the Firestore client instance."""
     if _firestore_db_client is None:
-        raise RuntimeError("Firestore client not initialized. Ensure FastAPI lifespan has run.")
+        raise RuntimeError("Firestore client not initialized. This typically happens if __firebase_config was not provided by the environment, or if initialization failed. Incidents will not be saved/retrieved.")
     return _firestore_db_client
 
 def get_app_id():
     """Provides the current application ID."""
     if _current_app_id is None:
+        # This should ideally not happen if app_id is set to 'default-app-id' as fallback
         raise RuntimeError("App ID not initialized. Ensure FastAPI lifespan has run.")
     return _current_app_id
 
@@ -109,8 +91,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# app.include_router(monitoring.router, prefix="/api/v1") # REMOVED: Moved into lifespan
 
 @app.get("/")
 async def read_root():
