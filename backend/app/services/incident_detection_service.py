@@ -51,7 +51,6 @@ class IncidentDetectionService:
         if not data_points:
             return None
 
-        # FIX: Make 'now' timezone-aware UTC to allow subtraction with timezone-aware dp.timeStamp
         now = datetime.now(timezone.utc) # Use datetime.now() with timezone.utc
 
         recent_data = [
@@ -79,7 +78,7 @@ class IncidentDetectionService:
             return Incident(
                 incident_type="High CPU Utilization",
                 resource_id=resource_id,
-                timestamp=datetime.utcnow(), # Keep this as naive for now, it's just for the Incident object's timestamp
+                timestamp=datetime.utcnow(),
                 details=f"Average CPU usage ({recent_avg_cpu:.2f}%) exceeded threshold ({self.cpu_threshold_percent}%) for the last {self.cpu_duration_minutes} minutes.",
                 severity="High"
             )
@@ -117,8 +116,9 @@ class IncidentDetectionService:
            not network_metrics.value[0].timeseries or not network_metrics.value[1].timeseries:
             return None
 
-        network_in_metric = next((m for m in network_metrics.value if m.name.value == "Network In Total"), None)
-        network_out_metric = next((m for m in network_metrics.value if m.name.value == "Network Out Total"), None)
+        # FIX: Access 'value' key from the 'name' dictionary
+        network_in_metric = next((m for m in network_metrics.value if m.name['value'] == "Network In Total"), None)
+        network_out_metric = next((m for m in network_metrics.value if m.name['value'] == "Network Out Total"), None)
 
         if not network_in_metric or not network_out_metric:
             return None
