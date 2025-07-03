@@ -2,6 +2,7 @@
 
 import React from 'react';
 import MetricDisplay from './components/MetricDisplay'; // Import the reusable MetricDisplay component
+import IncidentList from './components/IncidentList'; // Import the new IncidentList component
 
 function App() {
   return (
@@ -17,12 +18,7 @@ function App() {
         </p>
       </header>
 
-      {/* Main content area for charts.
-          Using Tailwind's grid layout for responsiveness.
-          'grid-cols-1' for small screens, 'md:grid-cols-2' for medium, 'lg:grid-cols-3' for large.
-          'gap-6' adds spacing between grid items.
-          'max-w-6xl' limits the overall width for better readability on large screens.
-          'mx-auto' centers the content horizontally. */}
+      {/* Main content area for charts. */}
       <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
         {/* CPU Metrics Chart */}
         <MetricDisplay
@@ -48,6 +44,11 @@ function App() {
           lineColor="#ffc658" // Yellow (Note: Network will have two lines, this is for the first)
         />
       </main>
+
+      {/* Incident List Section */}
+      <section className="mt-8">
+        <IncidentList />
+      </section>
     </div>
   );
 }
