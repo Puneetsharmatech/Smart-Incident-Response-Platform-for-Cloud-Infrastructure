@@ -1,0 +1,10 @@
+    # backend/requirements.txt
+
+    fastapi
+    uvicorn[standard]
+    azure-identity
+    azure-monitor-query
+    pydantic
+    python-dotenv
+    firebase-admin # NEW: For interacting with Firebase services like Firestore
+    
